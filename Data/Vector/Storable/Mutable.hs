@@ -158,7 +158,8 @@ instance Storable a => G.MVector MVector a where
 
 storableZero :: forall a m. (Storable a, PrimMonad m) => MVector (PrimState m) a -> m ()
 {-# INLINE storableZero #-}
-storableZero (MVector n fp) = unsafePrimToPrim . withForeignPtr fp $ \(Ptr p) -> do
+storableZero (MVector n fp) =if sizeOf x == 0 then return () else
+  unsafePrimToPrim . withForeignPtr fp $ \(Ptr p) -> do
   let q = Addr p
   setAddr q byteSize (0 :: Word8)
  where
