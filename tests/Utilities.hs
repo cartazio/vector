@@ -1,4 +1,4 @@
-{-# LANGUAGE FlexibleInstances, GADTs #-}
+{-# LANGUAGE FlexibleInstances, GADTs, FunctionalDependencies, UndecidableInstances #-}
 module Utilities where
 
 import Test.QuickCheck
@@ -63,48 +63,48 @@ instance Arbitrary a => Arbitrary (Writer a ()) where
 instance CoArbitrary a => CoArbitrary (Writer a ()) where
     coarbitrary = coarbitrary . runWriter
 
-class (Testable (EqTest a), Conclusion (EqTest a)) => TestData a where
-  type Model a
-  model :: a -> Model a
-  unmodel :: Model a -> a
+class (Testable (EqTest a), Conclusion (EqTest a), EqTest a ~ pred ) => TestData a rep pred | a -> rep, a -> pred   where
+  --type Model a
+  model :: a -> rep
+  unmodel :: rep  -> a
 
   type EqTest a
   equal :: a -> a -> EqTest a
 
-instance Eq a => TestData (S.Bundle v a) where
-  type Model (S.Bundle v a) = [a]
+instance Eq a => TestData (S.Bundle v a) [a] Property where
+  --type Model (S.Bundle v a) = [a]
   model = S.toList
   unmodel = S.fromList
 
   type EqTest (S.Bundle v a) = Property
   equal x y = property (x == y)
 
-instance Eq a => TestData (DV.Vector a) where
-  type Model (DV.Vector a) = [a]
+instance Eq a => TestData (DV.Vector a) [a] Property  where
+  --type Model (DV.Vector a) = [a]
   model = DV.toList
   unmodel = DV.fromList
 
   type EqTest (DV.Vector a) = Property
   equal x y = property (x == y)
 
-instance (Eq a, DVP.Prim a) => TestData (DVP.Vector a) where
-  type Model (DVP.Vector a) = [a]
+instance (Eq a, DVP.Prim a) => TestData (DVP.Vector a) [a] Property  where
+  --type Model (DVP.Vector a) = [a]
   model = DVP.toList
   unmodel = DVP.fromList
 
   type EqTest (DVP.Vector a) = Property
   equal x y = property (x == y)
 
-instance (Eq a, DVS.Storable a) => TestData (DVS.Vector a) where
-  type Model (DVS.Vector a) = [a]
+instance (Eq a, DVS.Storable a) => TestData (DVS.Vector a) [a]  Property where
+  --type Model (DVS.Vector a) = [a]
   model = DVS.toList
   unmodel = DVS.fromList
 
   type EqTest (DVS.Vector a) = Property
   equal x y = property (x == y)
 
-instance (Eq a, DVU.Unbox a) => TestData (DVU.Vector a) where
-  type Model (DVU.Vector a) = [a]
+instance (Eq a, DVU.Unbox a) => TestData (DVU.Vector a) [a]  Property where
+  --type Model (DVU.Vector a) = [a]
   model = DVU.toList
   unmodel = DVU.fromList
 
@@ -112,8 +112,7 @@ instance (Eq a, DVU.Unbox a) => TestData (DVU.Vector a) where
   equal x y = property (x == y)
 
 #define id_TestData(ty) \
-instance TestData ty where { \
-  type Model ty = ty;        \
+instance TestData ty ty Property where { \
   model = id;                \
   unmodel = id;              \
                              \
@@ -129,56 +128,58 @@ id_TestData(Ordering)
 
 -- Functorish models
 -- All of these need UndecidableInstances although they are actually well founded. Oh well.
-instance (Eq a, TestData a) => TestData (Maybe a) where
-  type Model (Maybe a) = Maybe (Model a)
+instance (Eq a, TestData a mod   Property) => TestData (Maybe a) (Maybe mod) Property where
+  --type Model (Maybe a) = Maybe (Model a)
   model = fmap model
   unmodel = fmap unmodel
 
   type EqTest (Maybe a) = Property
   equal x y = property (x == y)
 
-instance (Eq a, TestData a) => TestData [a] where
-  type Model [a] = [Model a]
+instance (Eq a, TestData a mod Property) => TestData [a] [mod]  Property where
+  --type Model [a] = [Model a]
   model = fmap model
   unmodel = fmap unmodel
 
   type EqTest [a] = Property
   equal x y = property (x == y)
 
-instance (Eq a, TestData a) => TestData (Identity a) where
-  type Model (Identity a) = Identity (Model a)
+instance (Eq a, TestData a mod Property) => TestData (Identity a) (Identity mod)  Property where
+  --type Model (Identity a) = Identity (Model a)
   model = fmap model
   unmodel = fmap unmodel
 
   type EqTest (Identity a) = Property
   equal = (property .) . on (==) runIdentity
 
-instance (Eq a, TestData a, Monoid a) => TestData (Writer a ()) where
-  type Model (Writer a ()) = Writer (Model a) ()
+instance (Eq a, TestData a mod Property, Monoid a) => TestData (Writer a ()) (Writer mod ())  Property where
+  --type Model (Writer a ()) = Writer (Model a) ()
   model = mapWriter model
   unmodel = mapWriter unmodel
 
   type EqTest (Writer a ()) = Property
   equal = (property .) . on (==) execWriter
 
-instance (Eq a, Eq b, TestData a, TestData b) => TestData (a,b) where
-  type Model (a,b) = (Model a, Model b)
+instance (Eq a, Eq b, TestData a moda Property,TestData b modb Property)
+    => TestData (a,b) (moda,modb) Property  where
+  --type Model (a,b) = (Model a, Model b)
   model (a,b) = (model a, model b)
   unmodel (a,b) = (unmodel a, unmodel b)
 
   type EqTest (a,b) = Property
   equal x y = property (x == y)
 
-instance (Eq a, Eq b, Eq c, TestData a, TestData b, TestData c) => TestData (a,b,c) where
-  type Model (a,b,c) = (Model a, Model b, Model c)
+instance (Eq a, Eq b, Eq c, TestData a moda Property,TestData b modb Property, TestData c modc Property) => TestData (a,b,c) (moda,modb,modc) Property  where
+  --type Model (a,b,c) = (Model a, Model b, Model c)
   model (a,b,c) = (model a, model b, model c)
   unmodel (a,b,c) = (unmodel a, unmodel b, unmodel c)
 
   type EqTest (a,b,c) = Property
   equal x y = property (x == y)
 
-instance (Arbitrary a, Show a, TestData a, TestData b) => TestData (a -> b) where
-  type Model (a -> b) = Model a -> Model b
+instance (Arbitrary a, Show a, TestData a moda Property,EqTest b ~ propb ,TestData b modb propb)
+     => TestData (a -> b) (moda -> modb) (a-> propb) where
+  --type Model (a -> b) = Model a -> Model b
   model f = model . f . unmodel
   unmodel f = unmodel . f . model
 
@@ -187,30 +188,30 @@ instance (Arbitrary a, Show a, TestData a, TestData b) => TestData (a -> b) wher
 
 newtype P a = P { unP :: EqTest a }
 
-instance TestData a => Testable (P a) where
+instance TestData a mod prop => Testable (P a) where
   property (P a) = property a
 
 infix 4 `eq`
-eq :: TestData a => a -> Model a -> P a
+eq :: TestData a mod prop  => a -> mod  -> P a
 eq x y = P (equal x (unmodel y))
 
-class Conclusion p where
+class Conclusion p    where
   type Predicate p
 
-  predicate :: Predicate p -> p -> p
+  predicate :: (Predicate p) ~prop => prop  -> p -> p
 
-instance Conclusion Property where
+instance Conclusion Property  where
   type Predicate Property = Bool
 
   predicate = (==>)
 
-instance Conclusion p => Conclusion (a -> p) where
+instance Conclusion p    => Conclusion (a -> p)    where
   type Predicate (a -> p) = a -> Predicate p
 
   predicate f p = \x -> predicate (f x) (p x)
 
 infixr 0 ===>
-(===>) :: TestData a => Predicate (EqTest a) -> P a -> P a
+(===>) :: TestData a rep  prop=> Predicate (EqTest a) -> P a -> P a
 p ===> P a = P (predicate p a)
 
 notNull2 _ xs = not $ DVG.null xs
@@ -218,7 +219,7 @@ notNullS2 _ s = not $ S.null s
 
 -- Generators
 index_value_pairs :: Arbitrary a => Int -> Gen [(Int,a)]
-index_value_pairs 0 = return [] 
+index_value_pairs 0 = return []
 index_value_pairs m = sized $ \n ->
   do
     len <- choose (0,n)
@@ -253,7 +254,7 @@ accum f xs ps = go xs ps' 0
     go (x:xs) ((i,y) : ps) j
       | i == j     = go (f x y : xs) ps j
     go (x:xs) ps j = x : go xs ps (j+1)
-    go [] _ _      = []  
+    go [] _ _      = []
 
 (//) :: [a] -> [(Int, a)] -> [a]
 xs // ps = go xs ps' 0

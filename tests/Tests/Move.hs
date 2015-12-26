@@ -6,6 +6,7 @@ import Test.QuickCheck.Property (Property(..))
 
 import Utilities ()
 
+
 import qualified Data.Vector.Generic as G
 import qualified Data.Vector.Generic.Mutable as M
 
@@ -27,6 +28,7 @@ testMove v = G.length v > 0 ==> (MkProperty $ do
   expected <- return $ basicMove v dstOff srcOff len
   actual <- return $  G.modify (\ mv -> M.move (M.slice dstOff len mv) (M.slice srcOff len mv)) v
   unProperty $ counterexample ("Move: " ++ show (v, dstOff, srcOff, len)) (expected == actual))
+
 
 tests =
     [testProperty "Data.Vector.Mutable (Move)" (testMove :: V.Vector Int -> Property),

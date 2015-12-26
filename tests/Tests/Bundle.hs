@@ -18,9 +18,9 @@ import System.Random       (Random)
  VANILLA_CONTEXT(a)
 
 #define VANILLA_CONTEXT(a) \
-  Eq a,     Show a,     Arbitrary a,     CoArbitrary a,     TestData a,     Model a ~ a,        EqTest a ~ Property
+  Eq a,     Show a,     Arbitrary a,     CoArbitrary a,     TestData a model Property,model ~ a,EqTest a ~ Property
 
-testSanity :: forall v a. (COMMON_CONTEXT(a)) => S.Bundle v a -> [Test]
+testSanity :: forall v a model  . (COMMON_CONTEXT(a)) => S.Bundle v a -> [Test]
 testSanity _ = [
         testProperty "fromList.toList == id" prop_fromList_toList,
         testProperty "toList.fromList == id" prop_toList_fromList
@@ -30,8 +30,8 @@ testSanity _ = [
         = (S.fromList . S.toList) `eq` id
     prop_toList_fromList :: P ([a] -> [a])
         = (S.toList . (S.fromList :: [a] -> S.Bundle v a)) `eq` id
-
-testPolymorphicFunctions :: forall v a. (COMMON_CONTEXT(a)) => S.Bundle v a -> [Test]
+{-# NOINLINE testPolymorphicFunctions #-}
+testPolymorphicFunctions :: forall v a model . (COMMON_CONTEXT(a)) => S.Bundle v a -> [Test]
 testPolymorphicFunctions _ = $(testProperties [
         'prop_eq,
 
@@ -61,9 +61,9 @@ testPolymorphicFunctions _ = $(testProperties [
         'prop_unfoldr
     ])
   where
+
     -- Prelude
     prop_eq :: P (S.Bundle v a -> S.Bundle v a -> Bool) = (==) `eq` (==)
-
     prop_length :: P (S.Bundle v a -> Int)     = S.length `eq` length
     prop_null   :: P (S.Bundle v a -> Bool)    = S.null `eq` null
     prop_empty  :: P (S.Bundle v a)            = S.empty `eq` []
@@ -136,7 +136,7 @@ testPolymorphicFunctions _ = $(testProperties [
                  S.scanl1 `eq` scanl1
     prop_scanl1' :: P ((a -> a -> a) -> S.Bundle v a -> S.Bundle v a) = notNullS2 ===>
                  S.scanl1' `eq` scanl1
- 
+
     prop_concatMap    = forAll arbitrary $ \xs ->
                         forAll (sized (\n -> resize (n `div` S.length xs) arbitrary)) $ \f -> unP prop f xs
       where
@@ -158,6 +158,7 @@ testBoolFunctions _ = $(testProperties ['prop_and, 'prop_or ])
 testBundleFunctions = testSanity (undefined :: S.Bundle v Int)
                       ++ testPolymorphicFunctions (undefined :: S.Bundle v Int)
                       ++ testBoolFunctions (undefined :: S.Bundle v Bool)
+
 
 tests = [ testGroup "Data.Vector.Fusion.Bundle" testBundleFunctions ]
 
